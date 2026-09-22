@@ -95,18 +95,22 @@ type config struct {
 	// implementation of internal/fx.Rates; every storefront template and
 	// the /currency handler talk through that single seam.
 	FXRates string
+	// StripeSecretKey is the Stripe API secret key (sk_test_xxx or
+	// sk_live_xxx). Used to authenticate all Stripe API requests from
+	// the backend. This MUST be set in production; the app will fail
+	// to boot if it is left empty in production mode.
+	StripeSecretKey string `conf:"default:,STRIPE_SECRET_KEY"`
+	// StripePublishableKey is the Stripe publishable key (pk_test_xxx
+	// or pk_live_xxx). Served to the frontend so Stripe.js can
+	// securely collect payment details. Safe to expose — publishable
+	// keys are meant to be public.
+	StripePublishableKey string `conf:"default:,STRIPE_PUBLISHABLE_KEY"`
 	// StripeWebhookSecret is the shared secret used to verify the HMAC
 	// signature on inbound payment webhooks (Stripe-Signature header).
-	// Defaults to a dev placeholder so the local stack can boot; the
+	// This is the whsec_xxx value from the Stripe dashboard. The
 	// payments webhook route is skipped entirely if the secret is left
-	// blank. Production operators MUST override.
-	StripeWebhookSecret string `conf:"default:whsec_dev_only_do_not_use_in_production,STRIPE_WEBHOOK_SECRET"`
-	// StripeFailCardEndingIn drives the fake provider's failure mode.
-	// Set it to e.g. "0000" so a card token ending in 0000 triggers a
-	// declined charge (status "failed"); leave empty and every charge
-	// the fake provider sees succeeds. Dev/test only — production
-	// payment failures come from the real provider's logic.
-	StripeFailCardEndingIn string `conf:"default:0000,STRIPE_FAIL_CARD_ENDING_IN"`
+	// blank.
+	StripeWebhookSecret string `conf:"default:,STRIPE_WEBHOOK_SECRET"`
 }
 
 // defaultSessionSecret is the placeholder value SessionSecret must NOT keep

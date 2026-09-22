@@ -31,12 +31,13 @@ func (o OptionType) Values() []string { return o.values }
 const lowStockThreshold = 5
 
 type Variant struct {
-	id      string
-	sku     string
-	image   string
-	options map[string]string // e.g. {"Color":"Red","Size":"L"}
-	price   Price
-	stock   int
+	id          string
+	sku         string
+	image       string
+	options     map[string]string // e.g. {"Color":"Red","Size":"L"}
+	price       Price
+	stock       int
+	weightGrams int
 }
 
 func NewVariant(id, sku, image string, options map[string]string, price Price, stock int) Variant {
@@ -46,12 +47,19 @@ func NewVariant(id, sku, image string, options map[string]string, price Price, s
 	return Variant{id: id, sku: sku, image: image, options: options, price: price, stock: stock}
 }
 
+// WithWeight returns a copy of the variant with the given weight set.
+func (v Variant) WithWeight(grams int) Variant {
+	v.weightGrams = grams
+	return v
+}
+
 func (v Variant) ID() string                 { return v.id }
 func (v Variant) SKU() string                { return v.sku }
 func (v Variant) Image() string              { return v.image }
 func (v Variant) Options() map[string]string { return v.options }
 func (v Variant) Price() Price               { return v.price }
 func (v Variant) Stock() int                 { return v.stock }
+func (v Variant) WeightGrams() int           { return v.weightGrams }
 func (v Variant) InStock() bool              { return v.stock > 0 }
 func (v Variant) LowStock() bool             { return v.stock > 0 && v.stock <= lowStockThreshold }
 func (v Variant) IsZero() bool               { return v.id == "" }

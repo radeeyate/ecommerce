@@ -43,10 +43,11 @@
 
     <section class="checkout__payment">
       <h2 class="checkout__heading">details</h2>
-      <p class="muted checkout__note">demo only — no real card is charged. enter anything in the payment fields.</p>
 
-      <form class="form" method="post" action="/checkout">
+      <form class="form" method="post" action="/checkout" id="payment-form">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <!-- Stripe PaymentMethod ID is set here by stripe-setup.js -->
+        <input type="hidden" name="card_number" id="stripe-pm-id">
 
         <fieldset class="fieldset">
           <legend class="fieldset__legend">promo code</legend>
@@ -114,21 +115,65 @@
 
         <fieldset class="fieldset">
           <legend class="fieldset__legend">card details</legend>
-          <p class="muted checkout__note">only needed for card payments.</p>
+          <p class="muted checkout__note">your card info is sent directly to Stripe — we never see the full number.</p>
 
-          <div class="field">
-            <label for="card-number">card number</label>
-            <input id="card-number" type="text" name="card_number" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242">
-          </div>
           <div class="field">
             <label for="card-name">name on card</label>
             <input id="card-name" type="text" name="card_name" autocomplete="cc-name" placeholder="Jane Doe">
           </div>
+          <div class="field">
+            <label for="card-element">card number</label>
+            <div id="card-element"><!-- Stripe Elements mounts here --></div>
+            <div id="card-errors" class="form__error" role="alert"></div>
+          </div>
         </fieldset>
 
-        <button type="submit" class="btn btn--block">place order</button>
+        <button type="submit" class="btn btn--block" id="submit-btn">place order</button>
         <p class="form__aside"><a href="/cart">&larr; back to cart</a></p>
       </form>
     </section>
   </div>
+{{end}}
+
+{{define "scripts"}}
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+  var stripe = Stripe('{{.StripePublishableKey}}');
+  var elements = stripe.elements();
+  var cardElement = elements.create('card', { style: {
+    base: { fontSize: '16px', color: '#32325d', fontFamily: 'Inter, sans-serif' }
+  }});
+  cardElement.mount('#card-element');
+
+  cardElement.on('change', function (event) {
+    var displayError = document.getElementById('card-errors');
+    if (event.error) {
+      displayError.textContent = event.error.message;
+    } else {
+      displayError.textContent = '';
+    }
+  });
+
+  var form = document.getElementById('payment-form');
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var submitBtn = document.getElementById('submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'processing…';
+
+    stripe.createPaymentMethod('card', cardElement, {
+      billing_details: { name: document.getElementById('card-name').value }
+    }).then(function (result) {
+      if (result.error) {
+        var displayError = document.getElementById('card-errors');
+        displayError.textContent = result.error.message;
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'place order';
+      } else {
+        document.getElementById('stripe-pm-id').value = result.paymentMethod.id;
+        form.submit();
+      }
+    });
+  });
+</script>
 {{end}}

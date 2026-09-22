@@ -51,9 +51,10 @@ func (handler httpHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Cart":            cart,
-		"ShippingMethods": checkoutDomain.ShippingMethods(),
-		"PaymentMethods":  checkoutDomain.PaymentMethods(),
+		"Cart":                  cart,
+		"ShippingMethods":       checkoutDomain.ShippingMethods(),
+		"PaymentMethods":        checkoutDomain.PaymentMethods(),
+		"StripePublishableKey":  handler.stripePublishableKey,
 	}
 
 	// Prefill the shipping form from the logged-in customer's default saved

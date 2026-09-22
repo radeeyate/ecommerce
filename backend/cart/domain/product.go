@@ -35,13 +35,19 @@ func MustNewCurrency(code string) Currency {
 func (c Currency) String() string { return string(c) }
 
 type Product struct {
-	id    string
-	name  string
-	price price
+	id          string
+	name        string
+	price       price
+	weightGrams int
 }
 
 func NewProduct(id string, name string, amount int64, currency Currency) Product {
 	return Product{id: id, name: name, price: price{amount: amount, currency: currency}}
+}
+
+func (p Product) WithWeight(grams int) Product {
+	p.weightGrams = grams
+	return p
 }
 
 func (p Product) ID() string {
@@ -54,6 +60,10 @@ func (p Product) Price() price {
 
 func (p Product) Name() string {
 	return p.name
+}
+
+func (p Product) WeightGrams() int {
+	return p.weightGrams
 }
 
 // price holds an amount in minor currency units (e.g. cents).

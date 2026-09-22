@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/bkielbasa/go-ecommerce/backend/internal/fakestripe"
+	"github.com/stripe/stripe-go/v81/webhook"
 )
 
 // paymentsWebhookService is the narrow seam the webhook handler needs
@@ -59,9 +59,9 @@ const (
 // CSRF middleware special-cases).
 //
 // SIGNATURE VERIFICATION. The first thing the handler does is read
-// the body in full, then call fakestripe.Verify against the
-// configured secret and the value of the Stripe-Signature header. A
-// failed signature is a 400 — we never act on an unverified payload.
+// the body in full, then call stripe.Webhook.ConstructEvent against
+// the configured secret and the value of the Stripe-Signature header.
+// A failed signature is a 400 — we never act on an unverified payload.
 // The body has to be read before verifying (HMAC needs the bytes) and
 // before parsing (JSON would consume the stream); buffering it is
 // the standard trade-off.
@@ -99,7 +99,8 @@ func paymentsWebhookHandler(secret string, srv paymentsWebhookService) http.Hand
 			return
 		}
 		sig := r.Header.Get("Stripe-Signature")
-		if err := fakestripe.Verify(secret, sig, body); err != nil {
+		_, err = webhook.ConstructEvent(body, sig, secret)
+		if err != nil {
 			http.Error(w, "invalid signature", http.StatusBadRequest)
 			return
 		}

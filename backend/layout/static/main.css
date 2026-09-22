@@ -449,6 +449,7 @@ main {
   font-size: var(--step-1);
   color: var(--fg-muted);
   max-width: var(--measure);
+  white-space: pre-wrap;
 }
 .product__price {
   font-size: var(--step-2);

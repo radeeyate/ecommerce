@@ -81,6 +81,7 @@ type Product struct {
 	description string
 	price       Price
 	thumbnail   string
+	weightGrams int
 	optionTypes []OptionType
 	variants    []Variant
 	categories  []Category
@@ -123,6 +124,12 @@ func NewProduct(id ProductID, name, description string, price Price, thumbnail s
 	}, nil
 }
 
+// WithWeight returns a copy of the product with the given weight set.
+func (p Product) WithWeight(grams int) Product {
+	p.weightGrams = grams
+	return p
+}
+
 func (p Product) ID() ProductID {
 	return p.id
 }
@@ -141,6 +148,10 @@ func (p Product) Price() Price {
 
 func (p Product) Thumbnail() string {
 	return p.thumbnail
+}
+
+func (p Product) WeightGrams() int {
+	return p.weightGrams
 }
 
 // WithCatalog returns a copy of the product with its option types and

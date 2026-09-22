@@ -69,6 +69,7 @@ type Line struct {
 	qty           int
 	priceAmount   int64
 	priceCurrency string
+	weightGrams   int
 }
 
 func NewLine(productID, productName string, qty int, priceAmount int64, priceCurrency string) Line {
@@ -81,6 +82,12 @@ func NewLine(productID, productName string, qty int, priceAmount int64, priceCur
 	}
 }
 
+// WithWeight returns a copy of the line with the given per-unit weight.
+func (l Line) WithWeight(grams int) Line {
+	l.weightGrams = grams
+	return l
+}
+
 func (l Line) ProductID() string     { return l.productID }
 func (l Line) ProductName() string   { return l.productName }
 func (l Line) Quantity() int         { return l.qty }
@@ -88,6 +95,8 @@ func (l Line) PriceAmount() int64    { return l.priceAmount }
 func (l Line) PriceCurrency() string { return l.priceCurrency }
 func (l Line) PriceDisplay() string  { return money(l.priceAmount) }
 func (l Line) LineTotal() int64      { return l.priceAmount * int64(l.qty) }
+func (l Line) WeightGrams() int     { return l.weightGrams }
+func (l Line) TotalWeightGrams() int { return l.weightGrams * l.qty }
 func (l Line) LineTotalDisplay() string {
 	return money(l.LineTotal())
 }
