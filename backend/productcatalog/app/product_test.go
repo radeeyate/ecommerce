@@ -21,6 +21,9 @@ type productStorage interface {
 	SetProductCategories(ctx context.Context, productID string, categoryIDs []string) error
 	SetProductAttributes(ctx context.Context, productID string, values []app.AttributeAssignment) error
 	SetProductAttributeSet(ctx context.Context, productID, setID string) error
+	SetProductParcel(ctx context.Context, productID string, parcel domain.Parcel) error
+	SetProductGallery(ctx context.Context, productID string, images []string) error
+	SetVariantWeight(ctx context.Context, variantID string, weightGrams int) error
 	Find(ctx context.Context, id string) (domain.Product, error)
 	FindVariant(ctx context.Context, variantID string) (domain.Product, domain.Variant, error)
 	AddOptionType(ctx context.Context, productID string, position int, ot domain.OptionType) error

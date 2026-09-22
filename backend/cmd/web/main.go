@@ -24,13 +24,14 @@ import (
 	"github.com/bkielbasa/go-ecommerce/backend/internal/application"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/dependency"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/eventbus"
-	"github.com/bkielbasa/go-ecommerce/backend/internal/stripe"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/fx"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/imagestore"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/inbox"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/mailer"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/observability"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/outbox"
+	"github.com/bkielbasa/go-ecommerce/backend/internal/shippo"
+	"github.com/bkielbasa/go-ecommerce/backend/internal/stripe"
 	"github.com/bkielbasa/go-ecommerce/backend/layout"
 	"github.com/bkielbasa/go-ecommerce/backend/payments"
 	"github.com/bkielbasa/go-ecommerce/backend/productcatalog"
@@ -163,6 +164,37 @@ func main() {
 	// different strategy here.
 	taxStrategy := checkoutdomain.FlatTaxStrategy{RatePercent: cfg.TaxRatePercent}
 	shippingStrategy := checkoutdomain.ThresholdShippingStrategy{FreeShippingThreshold: cfg.FreeShippingThreshold}
+	// Live carrier rates via Shippo. The client is optional: with no
+	// SHIPPO_API_KEY the provider stays nil and checkout serves the
+	// static shipping catalogue instead, which is the behaviour the
+	// storefront had before live rating existed. A misconfigured key is
+	// logged loudly rather than fatal for the same reason — shipping
+	// degrading is better than the storefront not booting.
+	var rateProvider checkoutdomain.RateProvider
+	if shippoClient, shippoErr := shippo.NewClient(cfg.ShippoAPIKey, cfg.ShippingRateTimeout); shippoErr == nil {
+		rateProvider = checkoutadapter.NewShippoRateProvider(shippoClient, checkoutadapter.ShippoConfig{
+			Origin: shippo.Address{
+				Name:    cfg.ShipFromName,
+				Street1: cfg.ShipFromStreet1,
+				City:    cfg.ShipFromCity,
+				State:   cfg.ShipFromState,
+				Zip:     cfg.ShipFromZip,
+				Country: cfg.ShipFromCountry,
+			},
+			DefaultParcel: checkoutdomain.Parcel{
+				WeightGrams: cfg.DefaultParcelWeightGrams,
+				LengthMM:    cfg.DefaultParcelLengthMM,
+				WidthMM:     cfg.DefaultParcelWidthMM,
+				HeightMM:    cfg.DefaultParcelHeightMM,
+			},
+			MarkupPercent: cfg.ShippingMarkupPercent,
+		})
+		if cfg.ShipFromStreet1 == "" || cfg.ShipFromZip == "" {
+			logger.Warn("SHIPPO_API_KEY is set but the ship-from address is incomplete; carrier rates will fail and checkout will fall back to static shipping methods")
+		}
+	} else {
+		logger.Info("no SHIPPO_API_KEY configured; checkout will offer the static shipping methods")
+	}
 	// Payments bounded context: an internal ACL in front of the
 	// real Stripe provider. The composition root is the only place
 	// that knows the Stripe SDK exists; checkout asks payments to charge
@@ -383,7 +415,7 @@ func main() {
 	// remain stored and charged in DefaultCurrency (USD).
 	fxRates := fx.New(cfg.DefaultCurrency, cfg.SupportedCurrencies, cfg.FXRates, logger)
 
-	app.AddBoundedContext(layout.New(logger, cartSrv, catalogService, authService, adminAuthService, checkoutSrv, checkoutQry, fulfillmentSrv, repricingSrv, shipSrv, reviewsSrv, wishlistSrv, promoSrv, searchSrv, storeSrv, imgStore, cfg.UploadsDir, []byte(cfg.SessionSecret), cfg.CookieSecure, cfg.CSRFEnabled, mailerSrv, cfg.BaseURL, fxRates, cfg.StripePublishableKey, cfg.StripeWebhookSecret, paymentsSrv))
+	app.AddBoundedContext(layout.New(logger, cartSrv, catalogService, authService, adminAuthService, checkoutSrv, checkoutQry, fulfillmentSrv, repricingSrv, shipSrv, reviewsSrv, wishlistSrv, promoSrv, searchSrv, storeSrv, imgStore, cfg.UploadsDir, []byte(cfg.SessionSecret), cfg.CookieSecure, cfg.CSRFEnabled, mailerSrv, cfg.BaseURL, fxRates, cfg.StripePublishableKey, rateProvider, cfg.StripeWebhookSecret, paymentsSrv))
 	// StoreMiddleware resolves the active store per request and binds
 	// it on the request context. It MUST run before the CSRF middleware
 	// so the store is available to every handler/template — including

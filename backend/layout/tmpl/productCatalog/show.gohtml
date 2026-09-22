@@ -7,13 +7,41 @@
   <p class="crumbs"><a href="/">products</a> / {{.Product.Name}}</p>
 
   <article class="product">
+    {{/*
+      The main image is the variant's when a variant is selected,
+      otherwise the product thumbnail. The variant box swaps this img's
+      src via HTMX on option change, so it keeps its id.
+    */}}
     {{$img := .Product.Thumbnail}}{{if .Variant.Image}}{{$img = .Variant.Image}}{{end}}
-    {{if $img}}
-      <img id="product-image" class="product__image"
-           src="{{$img}}"
-           alt="{{.Product.Name}}"
-           width="800" height="800">
-    {{end}}
+    <div class="product__media">
+      {{if $img}}
+        <img id="product-image" class="product__image"
+             src="{{$img}}"
+             alt="{{.Product.Name}}"
+             width="800" height="800">
+      {{end}}
+
+      {{/*
+        Gallery thumbnails. Clicking one swaps the main image without a
+        round trip. Selecting a variant still overrides the main image,
+        which is the behaviour we want: the variant is the more specific
+        choice.
+      */}}
+      {{if .Product.HasGallery}}
+        <ul class="product__gallery">
+          {{range $i, $g := .Product.Images}}
+            <li class="product__gallery-item">
+              <button type="button"
+                      class="product__gallery-btn{{if eq $i 0}} is-active{{end}}"
+                      data-image="{{$g}}"
+                      aria-label="View image {{add $i 1}}">
+                <img src="{{$g}}" alt="" width="72" height="72" loading="lazy">
+              </button>
+            </li>
+          {{end}}
+        </ul>
+      {{end}}
+    </div>
 
     <div class="product__body">
       <h1 class="product__name">{{.Product.Name}}</h1>
@@ -117,4 +145,27 @@
       <p class="muted"><a href="/auth/login">log in</a> to leave a review.</p>
     {{end}}
   </section>
+{{end}}
+
+{{define "scripts"}}
+<script>
+  // Gallery thumbnails swap the main product image in place. Selecting a
+  // variant still wins — the variant box replaces the same img's src via
+  // HTMX, and that is the more specific choice.
+  (function () {
+    var main = document.getElementById('product-image');
+    if (!main) return;
+    document.querySelectorAll('.product__gallery-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var src = btn.getAttribute('data-image');
+        if (!src) return;
+        main.src = src;
+        document.querySelectorAll('.product__gallery-btn').forEach(function (b) {
+          b.classList.remove('is-active');
+        });
+        btn.classList.add('is-active');
+      });
+    });
+  })();
+</script>
 {{end}}

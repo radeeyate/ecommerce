@@ -1,0 +1,1 @@
+ALTER TABLE public.productcatalog_product DROP COLUMN gallery;

@@ -44,6 +44,13 @@ type ProductStorage interface {
 	SetProductCategories(ctx context.Context, productID string, categoryIDs []string) error
 	SetProductAttributes(ctx context.Context, productID string, values []AttributeAssignment) error
 	SetProductAttributeSet(ctx context.Context, productID, setID string) error
+	// SetProductParcel records the product's physical measurements for
+	// carrier rate quotes.
+	SetProductParcel(ctx context.Context, productID string, parcel domain.Parcel) error
+	// SetProductGallery replaces the product's ordered gallery images.
+	SetProductGallery(ctx context.Context, productID string, images []string) error
+	// SetVariantWeight records a single variant's mass in grams.
+	SetVariantWeight(ctx context.Context, variantID string, weightGrams int) error
 	Find(ctx context.Context, id string) (domain.Product, error)
 	FindVariant(ctx context.Context, variantID string) (domain.Product, domain.Variant, error)
 	AddOptionType(ctx context.Context, productID string, position int, ot domain.OptionType) error
@@ -605,6 +612,57 @@ func (ps ProductService) SetProductAttributeSet(ctx context.Context, productID, 
 	return ps.storage.SetProductAttributeSet(ctx, productID, setID)
 }
 
+// SetProductGallery replaces the product's gallery with the given
+// ordered image list. Blank entries are dropped, so a form that
+// submitted five slots with two filled in stores exactly two images.
+//
+// The thumbnail is deliberately NOT part of the gallery: it remains the
+// canonical single image for grids, cart lines and social previews. The
+// product page renders the thumbnail first and the gallery after it.
+func (ps ProductService) SetProductGallery(ctx context.Context, productID string, images []string) error {
+	cleaned := make([]string, 0, len(images))
+	for _, img := range images {
+		if trimmed := strings.TrimSpace(img); trimmed != "" {
+			cleaned = append(cleaned, trimmed)
+		}
+	}
+	if err := ps.storage.SetProductGallery(ctx, productID, cleaned); err != nil {
+		return err
+	}
+	ps.reindexProduct(ctx, productID)
+	return nil
+}
+
+// SetProductParcel records a product's physical measurements, used to
+// fetch live carrier shipping rates. Weight is in grams and dimensions
+// in millimetres; zero means "unmeasured", which is valid — the
+// shipping adapter substitutes a configured default so an unmeasured
+// product cannot make checkout unrateable.
+//
+// Measurements deliberately live behind their own method rather than
+// widening Add/UpdateProduct: operators typically enter dimensions in a
+// separate pass from the core product copy (often after weighing the
+// item), and a focused method keeps every existing caller of the
+// product-creation path unchanged.
+func (ps ProductService) SetProductParcel(ctx context.Context, productID string, weightGrams, lengthMM, widthMM, heightMM int) error {
+	parcel, err := domain.NewParcel(weightGrams, lengthMM, widthMM, heightMM)
+	if err != nil {
+		return err
+	}
+	return ps.storage.SetProductParcel(ctx, productID, parcel)
+}
+
+// SetVariantWeight records a single variant's weight in grams. Variants
+// inherit their parent product's box dimensions but can differ in mass
+// (a large shirt weighs more than a small one in the same polybag), so
+// only weight is per-variant.
+func (ps ProductService) SetVariantWeight(ctx context.Context, variantID string, weightGrams int) error {
+	if weightGrams < 0 {
+		return fmt.Errorf("weight cannot be negative: %d", weightGrams)
+	}
+	return ps.storage.SetVariantWeight(ctx, variantID, weightGrams)
+}
+
 // ProductAttributeTypes returns the ordered attribute types a product's edit
 // form should show: when the product has an attribute set, its members (already
 // ordered); otherwise every attribute type as a fallback so products without a
@@ -638,6 +696,9 @@ type VariantInput struct {
 	Options map[string]string
 	Price   int64
 	Stock   int
+	// WeightGrams is the variant's mass, used for carrier rate quotes.
+	// Zero means "inherit the parent product's weight".
+	WeightGrams int
 }
 
 // AddVariantProduct creates a product with explicit option types and variants
@@ -685,7 +746,7 @@ func (ps ProductService) AddVariantProduct(ctx context.Context, id, name, desc, 
 		if err != nil {
 			return fmt.Errorf("invalid variant price: %w", err)
 		}
-		if err = ps.storage.AddVariant(ctx, id, i, domain.NewVariant(v.ID, v.SKU, v.Image, v.Options, price, v.Stock)); err != nil {
+		if err = ps.storage.AddVariant(ctx, id, i, domain.NewVariant(v.ID, v.SKU, v.Image, v.Options, price, v.Stock).WithWeight(v.WeightGrams)); err != nil {
 			return err
 		}
 	}

@@ -52,6 +52,20 @@ type seedProduct struct {
 	priceMinorUnits int64
 	currency        string
 	thumbnail       string
+	// Physical measurements for live carrier rate quotes. Weight in
+	// grams, dimensions in millimetres. These are plausible real-world
+	// figures so a dev stack wired to a Shippo test key returns
+	// believable rates rather than everything falling back to the
+	// default parcel.
+	weightGrams int
+	lengthMM    int
+	widthMM     int
+	heightMM    int
+	// gallery holds additional images shown on the product page after
+	// the thumbnail. Each uses a different loremflickr lock so the demo
+	// catalogue shows a genuinely multi-image gallery rather than the
+	// same photo repeated.
+	gallery []string
 }
 
 // seedProducts is a hand-picked catalogue of artisan home goods. Prices are
@@ -67,6 +81,10 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 900,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/paperclip,brass?lock=33",
+		weightGrams:     60,
+		lengthMM:        70,
+		widthMM:         50,
+		heightMM:        20,
 	},
 	{
 		id:              "walnut-serving-spoon",
@@ -75,6 +93,10 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 1800,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/wooden,spoon?lock=44",
+		weightGrams:     90,
+		lengthMM:        260,
+		widthMM:         60,
+		heightMM:        25,
 	},
 	{
 		id:              "wool-throw-charcoal",
@@ -83,6 +105,14 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 14500,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/wool,blanket?lock=55",
+		weightGrams:     1600,
+		lengthMM:        400,
+		widthMM:         300,
+		heightMM:        150,
+		gallery: []string{
+			"https://loremflickr.com/800/800/wool,texture?lock=551",
+			"https://loremflickr.com/800/800/blanket,sofa?lock=552",
+		},
 	},
 	{
 		id:              "glass-carafe-1l",
@@ -91,6 +121,10 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 4200,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/carafe,water?lock=66",
+		weightGrams:     700,
+		lengthMM:        280,
+		widthMM:         130,
+		heightMM:        130,
 	},
 	{
 		id:              "leather-notebook-a5",
@@ -99,6 +133,14 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 3600,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/leather,notebook?lock=77",
+		weightGrams:     420,
+		lengthMM:        215,
+		widthMM:         150,
+		heightMM:        25,
+		gallery: []string{
+			"https://loremflickr.com/800/800/notebook,pages?lock=771",
+			"https://loremflickr.com/800/800/leather,texture?lock=772",
+		},
 	},
 	{
 		id:              "cast-iron-skillet-10in",
@@ -107,6 +149,15 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 8900,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/castiron,skillet?lock=88",
+		weightGrams:     2400,
+		lengthMM:        450,
+		widthMM:         270,
+		heightMM:        60,
+		gallery: []string{
+			"https://loremflickr.com/800/800/castiron,cooking?lock=881",
+			"https://loremflickr.com/800/800/skillet,handle?lock=882",
+			"https://loremflickr.com/800/800/pan,seasoned?lock=883",
+		},
 	},
 	{
 		id:              "stoneware-vase-grey",
@@ -115,6 +166,10 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 3200,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/vase,pottery?lock=99",
+		weightGrams:     850,
+		lengthMM:        200,
+		widthMM:         120,
+		heightMM:        120,
 	},
 	{
 		id:              "cotton-tea-towels-set",
@@ -123,6 +178,10 @@ var seedProducts = []seedProduct{
 		priceMinorUnits: 2200,
 		currency:        "USD",
 		thumbnail:       "https://loremflickr.com/800/800/teatowel,kitchen?lock=110",
+		weightGrams:     300,
+		lengthMM:        250,
+		widthMM:         180,
+		heightMM:        40,
 	},
 }
 
@@ -134,6 +193,12 @@ type variantSeed struct {
 	thumbnail   string
 	optionTypes []app.OptionTypeInput
 	variants    []app.VariantInput
+	// Box dimensions shared by every variant of this product (a large
+	// apron ships in the same polybag as a small one). Per-variant mass
+	// lives on VariantInput.WeightGrams.
+	lengthMM int
+	widthMM  int
+	heightMM int
 }
 
 // Per-colour apron images, shared across that colour's size variants so
@@ -157,9 +222,12 @@ var variantSeeds = []variantSeed{
 			{Name: "Color", Values: []string{"Cream", "Charcoal"}},
 		},
 		variants: []app.VariantInput{
-			{ID: "ceramic-mug-cream", SKU: "MUG-CRM", Options: map[string]string{"Color": "Cream"}, Price: 2400, Image: "https://loremflickr.com/800/800/ceramic,mug,cream?lock=11", Stock: 40},
-			{ID: "ceramic-mug-charcoal", SKU: "MUG-CHR", Options: map[string]string{"Color": "Charcoal"}, Price: 2600, Image: "https://loremflickr.com/800/800/ceramic,mug,black?lock=211", Stock: 0},
+			{ID: "ceramic-mug-cream", SKU: "MUG-CRM", Options: map[string]string{"Color": "Cream"}, Price: 2400, Image: "https://loremflickr.com/800/800/ceramic,mug,cream?lock=11", Stock: 40, WeightGrams: 380},
+			{ID: "ceramic-mug-charcoal", SKU: "MUG-CHR", Options: map[string]string{"Color": "Charcoal"}, Price: 2600, Image: "https://loremflickr.com/800/800/ceramic,mug,black?lock=211", Stock: 0, WeightGrams: 390},
 		},
+		lengthMM: 140,
+		widthMM:  110,
+		heightMM: 110,
 	},
 	{
 		id:          "linen-apron",
@@ -172,13 +240,16 @@ var variantSeeds = []variantSeed{
 			{Name: "Size", Values: []string{"S", "M", "L"}},
 		},
 		variants: []app.VariantInput{
-			{ID: "linen-apron-nat-s", SKU: "APR-NAT-S", Options: map[string]string{"Color": "Natural", "Size": "S"}, Price: 5400, Image: natApron, Stock: 12},
-			{ID: "linen-apron-nat-m", SKU: "APR-NAT-M", Options: map[string]string{"Color": "Natural", "Size": "M"}, Price: 5800, Image: natApron, Stock: 8},
-			{ID: "linen-apron-nat-l", SKU: "APR-NAT-L", Options: map[string]string{"Color": "Natural", "Size": "L"}, Price: 6200, Image: natApron, Stock: 5},
-			{ID: "linen-apron-navy-s", SKU: "APR-NVY-S", Options: map[string]string{"Color": "Navy", "Size": "S"}, Price: 5600, Image: navyApron, Stock: 10},
-			{ID: "linen-apron-navy-m", SKU: "APR-NVY-M", Options: map[string]string{"Color": "Navy", "Size": "M"}, Price: 6000, Image: navyApron, Stock: 6},
-			{ID: "linen-apron-navy-l", SKU: "APR-NVY-L", Options: map[string]string{"Color": "Navy", "Size": "L"}, Price: 6400, Image: navyApron, Stock: 3},
+			{ID: "linen-apron-nat-s", SKU: "APR-NAT-S", Options: map[string]string{"Color": "Natural", "Size": "S"}, Price: 5400, Image: natApron, Stock: 12, WeightGrams: 260},
+			{ID: "linen-apron-nat-m", SKU: "APR-NAT-M", Options: map[string]string{"Color": "Natural", "Size": "M"}, Price: 5800, Image: natApron, Stock: 8, WeightGrams: 285},
+			{ID: "linen-apron-nat-l", SKU: "APR-NAT-L", Options: map[string]string{"Color": "Natural", "Size": "L"}, Price: 6200, Image: natApron, Stock: 5, WeightGrams: 310},
+			{ID: "linen-apron-navy-s", SKU: "APR-NVY-S", Options: map[string]string{"Color": "Navy", "Size": "S"}, Price: 5600, Image: navyApron, Stock: 10, WeightGrams: 260},
+			{ID: "linen-apron-navy-m", SKU: "APR-NVY-M", Options: map[string]string{"Color": "Navy", "Size": "M"}, Price: 6000, Image: navyApron, Stock: 6, WeightGrams: 285},
+			{ID: "linen-apron-navy-l", SKU: "APR-NVY-L", Options: map[string]string{"Color": "Navy", "Size": "L"}, Price: 6400, Image: navyApron, Stock: 3, WeightGrams: 310},
 		},
+		lengthMM: 300,
+		widthMM:  220,
+		heightMM: 50,
 	},
 }
 
@@ -502,11 +573,35 @@ func newSeedsCmd(pc productCatalog, db *sql.DB) *cobra.Command {
 				if err := pc.Add(ctx, p.id, p.name, p.description, p.priceMinorUnits, p.currency, p.thumbnail); err != nil {
 					return fmt.Errorf("seed %s: %w", p.id, err)
 				}
+				// Measurements are a separate call so the product-creation
+				// path stays unchanged for callers that do not ship
+				// physical goods.
+				if err := pc.SetProductParcel(ctx, p.id, p.weightGrams, p.lengthMM, p.widthMM, p.heightMM); err != nil {
+					return fmt.Errorf("seed parcel %s: %w", p.id, err)
+				}
+				// A simple product's auto-created default variant carries
+				// the product's own weight so basket rating works without
+				// the operator touching the variant.
+				if err := pc.SetVariantWeight(ctx, "var-"+p.id, p.weightGrams); err != nil {
+					return fmt.Errorf("seed variant weight %s: %w", p.id, err)
+				}
+				if len(p.gallery) > 0 {
+					if err := pc.SetProductGallery(ctx, p.id, p.gallery); err != nil {
+						return fmt.Errorf("seed gallery %s: %w", p.id, err)
+					}
+				}
 			}
 
 			for _, p := range variantSeeds {
 				if err := pc.AddVariantProduct(ctx, p.id, p.name, p.description, p.currency, p.thumbnail, p.optionTypes, p.variants); err != nil {
 					return fmt.Errorf("seed variant product %s: %w", p.id, err)
+				}
+				// Variant products carry per-variant weight (set in the
+				// seed table above); the box is shared, so only
+				// dimensions go on the parent. The parent weight stays 0
+				// because every purchasable unit is a variant.
+				if err := pc.SetProductParcel(ctx, p.id, 0, p.lengthMM, p.widthMM, p.heightMM); err != nil {
+					return fmt.Errorf("seed parcel %s: %w", p.id, err)
 				}
 			}
 

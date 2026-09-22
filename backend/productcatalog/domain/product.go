@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 var ErrProductNotFound = errors.New("product not found")
@@ -81,7 +82,6 @@ type Product struct {
 	description string
 	price       Price
 	thumbnail   string
-	weightGrams int
 	optionTypes []OptionType
 	variants    []Variant
 	categories  []Category
@@ -90,6 +90,15 @@ type Product struct {
 	// types this product has and in what order. Empty when the product has no
 	// set (it then falls back to all attribute types).
 	attributeSetID string
+	// parcel is the product's physical shape, used to get real carrier
+	// shipping rates. A zero parcel means the operator has not measured
+	// the product yet; the shipping adapter substitutes a default.
+	parcel Parcel
+	// gallery holds additional product images in display order. The
+	// thumbnail is NOT part of this slice: it stays the canonical
+	// single image used by grids, cart lines and og:image, and the
+	// product page shows it first followed by the gallery.
+	gallery []string
 }
 
 var emptyProduct = Product{}
@@ -124,11 +133,59 @@ func NewProduct(id ProductID, name, description string, price Price, thumbnail s
 	}, nil
 }
 
-// WithWeight returns a copy of the product with the given weight set.
-func (p Product) WithWeight(grams int) Product {
-	p.weightGrams = grams
+// WithParcel returns a copy of the product with its physical
+// measurements attached (used by the storage layer after loading, or
+// when an operator saves dimensions in the admin form).
+func (p Product) WithParcel(parcel Parcel) Product {
+	p.parcel = parcel
 	return p
 }
+
+// Parcel returns the product's physical measurements. A zero Parcel
+// means the product has not been measured.
+func (p Product) Parcel() Parcel { return p.parcel }
+
+// WithGallery returns a copy of the product carrying the given gallery
+// images in display order. Blank entries are dropped so a half-filled
+// admin form cannot produce empty <img> tags on the storefront.
+func (p Product) WithGallery(images []string) Product {
+	cleaned := make([]string, 0, len(images))
+	for _, img := range images {
+		if trimmed := strings.TrimSpace(img); trimmed != "" {
+			cleaned = append(cleaned, trimmed)
+		}
+	}
+	p.gallery = cleaned
+	return p
+}
+
+// Gallery returns the additional product images in display order,
+// excluding the thumbnail.
+func (p Product) Gallery() []string { return p.gallery }
+
+// Images returns every image for the product in display order: the
+// thumbnail first, then the gallery. This is what a product-page
+// carousel iterates over, and it means the page does not have to
+// special-case the thumbnail being separate from the gallery.
+//
+// Gallery entries equal to the thumbnail are skipped so an operator who
+// also pasted the main image into the gallery does not get it twice.
+func (p Product) Images() []string {
+	out := make([]string, 0, len(p.gallery)+1)
+	if p.thumbnail != "" {
+		out = append(out, p.thumbnail)
+	}
+	for _, img := range p.gallery {
+		if img != p.thumbnail {
+			out = append(out, img)
+		}
+	}
+	return out
+}
+
+// HasGallery reports whether the product has more than one image worth
+// showing, i.e. whether a carousel is warranted at all.
+func (p Product) HasGallery() bool { return len(p.Images()) > 1 }
 
 func (p Product) ID() ProductID {
 	return p.id
@@ -151,7 +208,7 @@ func (p Product) Thumbnail() string {
 }
 
 func (p Product) WeightGrams() int {
-	return p.weightGrams
+	return p.parcel.WeightGrams()
 }
 
 // WithCatalog returns a copy of the product with its option types and

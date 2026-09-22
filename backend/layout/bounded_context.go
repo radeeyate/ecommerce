@@ -50,6 +50,12 @@ type catalogService interface {
 	SetProductCategories(ctx context.Context, productID string, categoryIDs []string) error
 	SetProductAttributes(ctx context.Context, productID string, values []pcapp.AttributeAssignment) error
 	SetProductAttributeSet(ctx context.Context, productID, setID string) error
+	// SetProductParcel records the measurements used to fetch live
+	// carrier shipping rates. Zero values mean "unmeasured".
+	SetProductParcel(ctx context.Context, productID string, weightGrams, lengthMM, widthMM, heightMM int) error
+	// SetProductGallery replaces the product's ordered gallery images
+	// (the thumbnail is managed separately).
+	SetProductGallery(ctx context.Context, productID string, images []string) error
 	ProductAttributeTypes(ctx context.Context, productID string) ([]pcdomain.AttributeType, error)
 
 	CreateCategory(ctx context.Context, name, slug string) error
@@ -242,31 +248,36 @@ type checkoutQueries interface {
 // stripePublishableKey is served to the checkout page so Stripe.js can
 // securely collect payment details. Safe to expose — publishable keys
 // are meant to be public.
-func New(logger logrus.FieldLogger, cartSrv cartService, catalogSrv catalogService, authSrv authService, adminAuthSrv adminAuthService, checkoutSrv checkoutCommands, checkoutQry checkoutQueries, fulfillmentSrv fulfillmentService, repricingSrv repricingService, shipSrv shippingService, reviewsSrv reviewsService, wishlistSrv wishlistService, promoSrv promoService, searchSrv searchService, storeSrv storeService, imageStore imagestore.Store, uploadsDir string, sessionSecret []byte, cookieSecure, csrfEnabled bool, mailerSrv mailer.Mailer, baseURL string, rates fx.Rates, stripePublishableKey string, paymentsWebhookSecret string, paymentsWebhookSrv paymentsWebhookService) application.BoundedContext {
+//
+// rateProvider supplies live carrier shipping rates. Pass nil to fall
+// back to the static shipping-method catalogue, which is what happens
+// when no carrier account is configured.
+func New(logger logrus.FieldLogger, cartSrv cartService, catalogSrv catalogService, authSrv authService, adminAuthSrv adminAuthService, checkoutSrv checkoutCommands, checkoutQry checkoutQueries, fulfillmentSrv fulfillmentService, repricingSrv repricingService, shipSrv shippingService, reviewsSrv reviewsService, wishlistSrv wishlistService, promoSrv promoService, searchSrv searchService, storeSrv storeService, imageStore imagestore.Store, uploadsDir string, sessionSecret []byte, cookieSecure, csrfEnabled bool, mailerSrv mailer.Mailer, baseURL string, rates fx.Rates, stripePublishableKey string, rateProvider checkoutDomain.RateProvider, paymentsWebhookSecret string, paymentsWebhookSrv paymentsWebhookService) application.BoundedContext {
 	store = newCookieStore(sessionSecret, cookieSecure)
 	setCSRFEnabled(csrfEnabled)
 	return &boundedContext{
 		handler: httpHandler{
-			cartSrv:        cartSrv,
-			catalogSrv:     catalogSrv,
-			authSrv:        authSrv,
-			adminAuthSrv:   adminAuthSrv,
-			checkoutSrv:    checkoutSrv,
-			checkoutQry:    checkoutQry,
-			fulfillmentSrv: fulfillmentSrv,
-			repricingSrv:   repricingSrv,
-			shipSrv:        shipSrv,
-			reviewsSrv:     reviewsSrv,
-			wishlistSrv:    wishlistSrv,
-			promoSrv:       promoSrv,
-			searchSrv:      searchSrv,
-			storeSrv:       storeSrv,
-			imageStore:     imageStore,
-			mailer:         mailerSrv,
-			baseURL:        baseURL,
-			rates:          rates,
+			cartSrv:              cartSrv,
+			catalogSrv:           catalogSrv,
+			authSrv:              authSrv,
+			adminAuthSrv:         adminAuthSrv,
+			checkoutSrv:          checkoutSrv,
+			checkoutQry:          checkoutQry,
+			fulfillmentSrv:       fulfillmentSrv,
+			repricingSrv:         repricingSrv,
+			shipSrv:              shipSrv,
+			reviewsSrv:           reviewsSrv,
+			wishlistSrv:          wishlistSrv,
+			promoSrv:             promoSrv,
+			searchSrv:            searchSrv,
+			storeSrv:             storeSrv,
+			imageStore:           imageStore,
+			mailer:               mailerSrv,
+			baseURL:              baseURL,
+			rates:                rates,
 			stripePublishableKey: stripePublishableKey,
-			logger:         logger,
+			rateProvider:         rateProvider,
+			logger:               logger,
 		},
 		uploadsDir:            uploadsDir,
 		paymentsWebhookSecret: paymentsWebhookSecret,

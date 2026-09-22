@@ -2,6 +2,7 @@ package layout
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"mime/multipart"
 	"net/http"
@@ -46,6 +47,44 @@ func (handler httpHandler) resolveImageFromHeader(r *http.Request, fh *multipart
 	}
 	defer func() { _ = f.Close() }()
 	return handler.imageStore.Save(r.Context(), fh.Filename, fh.Header.Get("Content-Type"), f)
+}
+
+// resolveGallery collects the product's additional images from a
+// multipart form. Two input channels are merged, in this order:
+//
+//  1. every file uploaded under `gallery_files` (a multiple-file input),
+//     each saved through the image store; and
+//  2. every non-blank line of the `gallery_urls` textarea.
+//
+// Uploads come first because an operator adding new photos to an
+// existing product expects them appended in the order chosen, while the
+// textarea is the escape hatch for externally-hosted images.
+//
+// A failed upload aborts the whole gallery update rather than silently
+// storing a partial list — an operator who uploaded five photos should
+// not have to guess which three landed.
+func (handler httpHandler) resolveGallery(r *http.Request) ([]string, error) {
+	var images []string
+
+	if r.MultipartForm != nil {
+		for _, fh := range r.MultipartForm.File["gallery_files"] {
+			url, err := handler.resolveImageFromHeader(r, fh, "")
+			if err != nil {
+				return nil, fmt.Errorf("gallery image %q: %w", fh.Filename, err)
+			}
+			if url != "" {
+				images = append(images, url)
+			}
+		}
+	}
+
+	for _, line := range strings.Split(r.FormValue("gallery_urls"), "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			images = append(images, trimmed)
+		}
+	}
+
+	return images, nil
 }
 
 // parsePriceMinorUnits parses a decimal major-units price string (e.g. "9.00"
@@ -141,6 +180,18 @@ func (handler httpHandler) AdminCreateProduct(w http.ResponseWriter, r *http.Req
 	if setID := strings.TrimSpace(r.FormValue("attribute_set")); setID != "" {
 		if err := handler.catalogSrv.SetProductAttributeSet(r.Context(), id, setID); err != nil {
 			handler.flash(w, r, "Product created, but the attribute set could not be assigned: "+err.Error(), "error")
+			http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
+			return
+		}
+	}
+	// Shipping measurements are optional at creation time; operators
+	// often weigh an item after adding it. Zero means "unmeasured".
+	if wg, l, wd, h := parseNonNegativeInt(r.FormValue("weight_grams")),
+		parseNonNegativeInt(r.FormValue("length_mm")),
+		parseNonNegativeInt(r.FormValue("width_mm")),
+		parseNonNegativeInt(r.FormValue("height_mm")); wg > 0 || l > 0 || wd > 0 || h > 0 {
+		if perr := handler.catalogSrv.SetProductParcel(r.Context(), id, wg, l, wd, h); perr != nil {
+			handler.flash(w, r, "Product created, but shipping measurements could not be saved: "+perr.Error(), "error")
 			http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
 			return
 		}
@@ -241,10 +292,50 @@ func (handler httpHandler) AdminUpdateProduct(w http.ResponseWriter, r *http.Req
 	err = handler.catalogSrv.UpdateProduct(r.Context(), id, r.FormValue("name"), r.FormValue("description"), price, currency, thumbnail)
 	if err != nil {
 		handler.flash(w, r, err.Error(), "error")
-	} else {
-		handler.flash(w, r, "Product updated", "info")
+		http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
+		return
 	}
+	// Shipping measurements are saved alongside the core fields. Blank or
+	// unparseable inputs become zero, which the catalogue treats as
+	// "unmeasured" — the shipping adapter then falls back to the
+	// configured default parcel rather than refusing to quote.
+	if perr := handler.catalogSrv.SetProductParcel(r.Context(), id,
+		parseNonNegativeInt(r.FormValue("weight_grams")),
+		parseNonNegativeInt(r.FormValue("length_mm")),
+		parseNonNegativeInt(r.FormValue("width_mm")),
+		parseNonNegativeInt(r.FormValue("height_mm")),
+	); perr != nil {
+		handler.flash(w, r, "Product updated, but shipping measurements could not be saved: "+perr.Error(), "error")
+		http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
+		return
+	}
+	// The gallery is saved from the same form as the core fields so an
+	// operator adds copy, photos and measurements in one pass.
+	gallery, gerr := handler.resolveGallery(r)
+	if gerr != nil {
+		handler.flash(w, r, "Product updated, but the gallery could not be saved: "+gerr.Error(), "error")
+		http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
+		return
+	}
+	if gerr := handler.catalogSrv.SetProductGallery(r.Context(), id, gallery); gerr != nil {
+		handler.flash(w, r, "Product updated, but the gallery could not be saved: "+gerr.Error(), "error")
+		http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
+		return
+	}
+	handler.flash(w, r, "Product updated", "info")
 	http.Redirect(w, r, "/admin/products/"+id+"/edit", http.StatusSeeOther)
+}
+
+// parseNonNegativeInt reads an optional integer form field. A blank,
+// malformed or negative value yields 0, which every caller treats as
+// "not set" rather than an error — shipping measurements are optional
+// and a typo should not block saving the rest of the product.
+func parseNonNegativeInt(raw string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }
 
 // AdminUpdateProductStock parses each variant's stock input (stock_<variantID>)

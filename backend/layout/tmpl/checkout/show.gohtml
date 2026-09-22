@@ -46,7 +46,11 @@
 
       <form class="form" method="post" action="/checkout" id="payment-form">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-        <!-- Stripe PaymentMethod ID is set here by stripe-setup.js -->
+        <!--
+          Stripe hands us a PaymentMethod token client-side; that token,
+          never a card number, is what gets posted. The field keeps its
+          historical name so the server-side form contract is unchanged.
+        -->
         <input type="hidden" name="card_number" id="stripe-pm-id">
 
         <fieldset class="fieldset">
@@ -60,13 +64,13 @@
 
         <fieldset class="fieldset">
           <legend class="fieldset__legend">shipping method</legend>
-          {{range .ShippingMethods}}
-            <label class="radio">
-              <input type="radio" name="ship_method" value="{{.Code}}" {{if eq .Code "flat"}}checked{{end}}>
-              <span class="radio__label">{{.Label}}</span>
-              <span class="radio__cost muted">{{ money .Cost }}</span>
-            </label>
-          {{end}}
+          {{/*
+            Swapped by the HTMX hooks on the address inputs below. The
+            initial render shows the static catalogue; once the address
+            is complete enough to rate, this is replaced with live
+            carrier quotes.
+          */}}
+          {{ html .ShippingMethodsHTML }}
         </fieldset>
 
         <fieldset class="fieldset">
@@ -77,13 +81,22 @@
             <p class="muted checkout__note">not needed for personal pickup.</p>
           {{end}}
 
+          {{/*
+            Each address field that affects a carrier quote triggers a
+            rate refresh on change. hx-include pulls the whole address
+            group so the endpoint sees a complete destination rather
+            than just the field that changed. The debounce keeps a
+            customer typing a zip code from firing five carrier calls.
+          */}}
           <div class="field">
             <label for="ship-name">full name</label>
             <input id="ship-name" type="text" name="ship_name" autocomplete="name" placeholder="Jane Doe" value="{{with .ShipTo}}{{.Name}}{{end}}">
           </div>
           <div class="field">
             <label for="ship-street1">street</label>
-            <input id="ship-street1" type="text" name="ship_street1" autocomplete="address-line1" placeholder="123 Main St" value="{{with .ShipTo}}{{.Street1}}{{end}}">
+            <input id="ship-street1" type="text" name="ship_street1" autocomplete="address-line1" placeholder="123 Main St" value="{{with .ShipTo}}{{.Street1}}{{end}}"
+                   hx-post="/checkout/rates" hx-target="#shipping-methods" hx-swap="outerHTML"
+                   hx-trigger="change, keyup changed delay:800ms" hx-include="[name^='ship_']">
           </div>
           <div class="field">
             <label for="ship-street2">street (line 2)</label>
@@ -91,15 +104,21 @@
           </div>
           <div class="field">
             <label for="ship-city">city</label>
-            <input id="ship-city" type="text" name="ship_city" autocomplete="address-level2" placeholder="Portland" value="{{with .ShipTo}}{{.City}}{{end}}">
+            <input id="ship-city" type="text" name="ship_city" autocomplete="address-level2" placeholder="Portland" value="{{with .ShipTo}}{{.City}}{{end}}"
+                   hx-post="/checkout/rates" hx-target="#shipping-methods" hx-swap="outerHTML"
+                   hx-trigger="change, keyup changed delay:800ms" hx-include="[name^='ship_']">
           </div>
           <div class="field">
             <label for="ship-zip">zip code</label>
-            <input id="ship-zip" type="text" name="ship_zip" autocomplete="postal-code" placeholder="97201" value="{{with .ShipTo}}{{.Zip}}{{end}}">
+            <input id="ship-zip" type="text" name="ship_zip" autocomplete="postal-code" placeholder="97201" value="{{with .ShipTo}}{{.Zip}}{{end}}"
+                   hx-post="/checkout/rates" hx-target="#shipping-methods" hx-swap="outerHTML"
+                   hx-trigger="change, keyup changed delay:800ms" hx-include="[name^='ship_']">
           </div>
           <div class="field">
             <label for="ship-country">country</label>
-            <input id="ship-country" type="text" name="ship_country" autocomplete="country-name" placeholder="United States" value="{{with .ShipTo}}{{.Country}}{{end}}">
+            <input id="ship-country" type="text" name="ship_country" autocomplete="country-name" placeholder="United States" value="{{with .ShipTo}}{{.Country}}{{end}}"
+                   hx-post="/checkout/rates" hx-target="#shipping-methods" hx-swap="outerHTML"
+                   hx-trigger="change, keyup changed delay:800ms" hx-include="[name^='ship_']">
           </div>
         </fieldset>
 

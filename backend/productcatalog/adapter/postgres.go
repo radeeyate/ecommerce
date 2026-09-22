@@ -25,10 +25,12 @@ func NewPostgres(db *sql.DB) postgres {
 }
 
 func (db postgres) Add(ctx context.Context, p domain.Product) error {
-	q := `INSERT INTO productcatalog_product (id, name, description, thumbnail, price_amount, price_currency)
-		VALUES ($1, $2, $3, $4, $5, $6)`
+	q := `INSERT INTO productcatalog_product (id, name, description, thumbnail, price_amount, price_currency, weight_grams, length_mm, width_mm, height_mm)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
 
-	_, err := db.db.ExecContext(ctx, q, p.ID(), p.Name(), p.Description(), p.Thumbnail(), p.Price().Amount(), p.Price().Currency())
+	parcel := p.Parcel()
+	_, err := db.db.ExecContext(ctx, q, p.ID(), p.Name(), p.Description(), p.Thumbnail(), p.Price().Amount(), p.Price().Currency(),
+		parcel.WeightGrams(), parcel.LengthMM(), parcel.WidthMM(), parcel.HeightMM())
 	if err != nil {
 		return fmt.Errorf("cannot add the product: %w", err)
 	}
@@ -235,7 +237,7 @@ func (db postgres) optionTypes(ctx context.Context, productID string) ([]domain.
 
 func (db postgres) variants(ctx context.Context, productID string) ([]domain.Variant, error) {
 	rows, err := db.db.QueryContext(ctx, `
-		SELECT id, sku, image_url, price_amount, price_currency, options, stock FROM productcatalog_variant
+		SELECT id, sku, image_url, price_amount, price_currency, options, stock, weight_grams FROM productcatalog_variant
 		WHERE product_id = $1 ORDER BY position
 	`, productID)
 	if err != nil {
@@ -333,7 +335,7 @@ func (db postgres) productAttributes(ctx context.Context, productID string) ([]d
 }
 
 func (db postgres) All(ctx context.Context) ([]domain.Product, error) {
-	q := `SELECT id, name, description, thumbnail, price_amount, price_currency, attribute_set_id FROM productcatalog_product ORDER BY id`
+	q := `SELECT id, name, description, thumbnail, price_amount, price_currency, attribute_set_id, weight_grams, length_mm, width_mm, height_mm, gallery FROM productcatalog_product ORDER BY id`
 
 	rows, err := db.db.QueryContext(ctx, q)
 	if err != nil {
@@ -370,7 +372,7 @@ func (db postgres) All(ctx context.Context) ([]domain.Product, error) {
 // (ties broken by id), each hydrated with its catalog/classification the same
 // way All does.
 func (db postgres) Newest(ctx context.Context, limit int) ([]domain.Product, error) {
-	q := `SELECT id, name, description, thumbnail, price_amount, price_currency, attribute_set_id
+	q := `SELECT id, name, description, thumbnail, price_amount, price_currency, attribute_set_id, weight_grams, length_mm, width_mm, height_mm, gallery
 		FROM productcatalog_product
 		ORDER BY created_at DESC, id DESC
 		LIMIT $1`
@@ -407,7 +409,7 @@ func (db postgres) Newest(ctx context.Context, limit int) ([]domain.Product, err
 }
 
 func (db postgres) Find(ctx context.Context, id string) (domain.Product, error) {
-	q := `SELECT id, name, description, thumbnail, price_amount, price_currency, attribute_set_id FROM productcatalog_product WHERE id = $1`
+	q := `SELECT id, name, description, thumbnail, price_amount, price_currency, attribute_set_id, weight_grams, length_mm, width_mm, height_mm, gallery FROM productcatalog_product WHERE id = $1`
 	p, err := scanProduct(db.db.QueryRowContext(ctx, q, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Product{}, domain.ErrProductNotFound
@@ -447,7 +449,9 @@ func scanProduct(s rowScanner) (domain.Product, error) {
 	var id, name, description, thumbnail, currency string
 	var amount int64
 	var attributeSetID sql.NullString
-	if err := s.Scan(&id, &name, &description, &thumbnail, &amount, &currency, &attributeSetID); err != nil {
+	var weightGrams, lengthMM, widthMM, heightMM int
+	var gallery pq.StringArray
+	if err := s.Scan(&id, &name, &description, &thumbnail, &amount, &currency, &attributeSetID, &weightGrams, &lengthMM, &widthMM, &heightMM, &gallery); err != nil {
 		return domain.Product{}, err
 	}
 	pid, err := domain.NewProductId(id)
@@ -466,7 +470,8 @@ func scanProduct(s rowScanner) (domain.Product, error) {
 	if err != nil {
 		return domain.Product{}, err
 	}
-	return p.WithAttributeSet(attributeSetID.String), nil
+	parcel := domain.RebuildParcel(weightGrams, lengthMM, widthMM, heightMM)
+	return p.WithAttributeSet(attributeSetID.String).WithParcel(parcel).WithGallery(gallery), nil
 }
 
 func scanVariant(s rowScanner) (domain.Variant, error) {
@@ -474,7 +479,8 @@ func scanVariant(s rowScanner) (domain.Variant, error) {
 	var amount int64
 	var stock int
 	var optionsRaw []byte
-	if err := s.Scan(&id, &sku, &image, &amount, &currency, &optionsRaw, &stock); err != nil {
+	var weightGrams int
+	if err := s.Scan(&id, &sku, &image, &amount, &currency, &optionsRaw, &stock, &weightGrams); err != nil {
 		return domain.Variant{}, err
 	}
 	cur, err := domain.NewCurrency(currency)
@@ -489,7 +495,7 @@ func scanVariant(s rowScanner) (domain.Variant, error) {
 	if err := json.Unmarshal(optionsRaw, &options); err != nil {
 		return domain.Variant{}, fmt.Errorf("unmarshal variant options: %w", err)
 	}
-	return domain.NewVariant(id, sku, image, options, price, stock), nil
+	return domain.NewVariant(id, sku, image, options, price, stock).WithWeight(weightGrams), nil
 }
 
 // Reserve atomically decrements stock for every variant in quantities. It is
@@ -896,6 +902,43 @@ func (db postgres) SetProductAttributeSet(ctx context.Context, productID, setID 
 	`, productID, setVal)
 	if err != nil {
 		return fmt.Errorf("set product attribute set: %w", err)
+	}
+	return nil
+}
+
+// SetProductGallery replaces the product's gallery images with the given
+// ordered list. An empty slice clears the gallery.
+func (db postgres) SetProductGallery(ctx context.Context, productID string, images []string) error {
+	_, err := db.db.ExecContext(ctx, `
+		UPDATE productcatalog_product SET gallery = $2 WHERE id = $1
+	`, productID, pq.StringArray(images))
+	if err != nil {
+		return fmt.Errorf("set product gallery: %w", err)
+	}
+	return nil
+}
+
+// SetProductParcel records the product's physical measurements used for
+// carrier rate quotes.
+func (db postgres) SetProductParcel(ctx context.Context, productID string, parcel domain.Parcel) error {
+	_, err := db.db.ExecContext(ctx, `
+		UPDATE productcatalog_product
+		SET weight_grams = $2, length_mm = $3, width_mm = $4, height_mm = $5
+		WHERE id = $1
+	`, productID, parcel.WeightGrams(), parcel.LengthMM(), parcel.WidthMM(), parcel.HeightMM())
+	if err != nil {
+		return fmt.Errorf("set product parcel: %w", err)
+	}
+	return nil
+}
+
+// SetVariantWeight records a single variant's mass in grams.
+func (db postgres) SetVariantWeight(ctx context.Context, variantID string, weightGrams int) error {
+	_, err := db.db.ExecContext(ctx, `
+		UPDATE productcatalog_variant SET weight_grams = $2 WHERE id = $1
+	`, variantID, weightGrams)
+	if err != nil {
+		return fmt.Errorf("set variant weight: %w", err)
 	}
 	return nil
 }

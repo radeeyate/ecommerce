@@ -14,6 +14,13 @@ import (
 type productCatalog interface {
 	Add(ctx context.Context, id, name, desc string, priceMinorUnits int64, currency, thumbnail string) error
 	AddVariantProduct(ctx context.Context, id, name, desc, currency, thumbnail string, optionTypes []app.OptionTypeInput, variants []app.VariantInput) error
+	// SetProductParcel records the measurements used to fetch live
+	// carrier shipping rates at checkout.
+	SetProductParcel(ctx context.Context, productID string, weightGrams, lengthMM, widthMM, heightMM int) error
+	// SetVariantWeight records a single variant's mass in grams.
+	SetVariantWeight(ctx context.Context, variantID string, weightGrams int) error
+	// SetProductGallery replaces the product's ordered gallery images.
+	SetProductGallery(ctx context.Context, productID string, images []string) error
 }
 
 func newProductCatalogCmd(pc productCatalog) *cobra.Command {

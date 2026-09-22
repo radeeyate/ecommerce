@@ -13,9 +13,9 @@
 //     "requires_action" / "succeeded" / "failed"; payments-domain
 //     statuses are pending / succeeded / failed. The mapping is:
 //
-//       stripe.StatusRequiresAction -> domain.StatusPending
-//       stripe.StatusSucceeded      -> domain.StatusSucceeded
-//       stripe.StatusFailed         -> domain.StatusFailed
+//     stripe.StatusRequiresAction -> domain.StatusPending
+//     stripe.StatusSucceeded      -> domain.StatusSucceeded
+//     stripe.StatusFailed         -> domain.StatusFailed
 //
 //     "requires_action" -> "pending" is the load-bearing
 //     translation: the provider's "SCA challenge in flight" state is,

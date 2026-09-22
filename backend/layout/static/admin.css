@@ -446,6 +446,20 @@ input:focus, select:focus, textarea:focus {
 .variant-table { width: 100%; }
 .variant-table input,
 .variant-table select { width: 100%; }
+/* Current gallery images shown above the gallery inputs so an operator
+   can see what saving will replace. */
+.admin-gallery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.admin-gallery__thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border: 1px solid var(--a-rule, #d7dbe2);
+}
 .form--inline {
   flex-direction: row;
   flex-wrap: wrap;

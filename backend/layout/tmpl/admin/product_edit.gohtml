@@ -23,6 +23,34 @@
           <input id="p-thumbnail" name="thumbnail" value="{{.Product.Thumbnail}}" placeholder="or paste a URL">
           <p class="form__aside muted">Upload a new image to replace the current one, or paste a URL. If both are provided, the upload wins.</p>
         </div>
+
+        <h4 class="admin-section__subtitle">gallery</h4>
+        <p class="form__aside muted">Additional images shown on the product page after the thumbnail. Saving replaces the whole gallery, so keep the URLs below for any images you want to retain.</p>
+        {{if .Product.Gallery}}
+          <div class="admin-gallery">
+            {{range $img := .Product.Gallery}}
+              <img class="admin-gallery__thumb" src="{{$img}}" alt="" width="80" height="80" loading="lazy">
+            {{end}}
+          </div>
+        {{end}}
+        <div class="field">
+          <label for="p-gallery-files">add images</label>
+          <input id="p-gallery-files" type="file" name="gallery_files" multiple accept="image/jpeg,image/png,image/webp,image/gif">
+        </div>
+        <div class="field">
+          <label for="p-gallery-urls">image URLs (one per line)</label>
+          <textarea id="p-gallery-urls" name="gallery_urls" rows="4" placeholder="https://example.com/photo-2.jpg">{{range $img := .Product.Gallery}}{{$img}}
+{{end}}</textarea>
+          <p class="form__aside muted">Uploads are appended before these URLs.</p>
+        </div>
+
+        <h4 class="admin-section__subtitle">shipping measurements</h4>
+        <p class="form__aside muted">Used to fetch live carrier rates at checkout. Leave blank or zero if unmeasured &mdash; the configured default parcel is used instead. Weight in grams, dimensions in millimetres.</p>
+        <div class="field"><label for="p-weight">weight (g)</label><input id="p-weight" name="weight_grams" type="number" min="0" value="{{.Product.Parcel.WeightGrams}}"></div>
+        <div class="field"><label for="p-length">length (mm)</label><input id="p-length" name="length_mm" type="number" min="0" value="{{.Product.Parcel.LengthMM}}"></div>
+        <div class="field"><label for="p-width">width (mm)</label><input id="p-width" name="width_mm" type="number" min="0" value="{{.Product.Parcel.WidthMM}}"></div>
+        <div class="field"><label for="p-height">height (mm)</label><input id="p-height" name="height_mm" type="number" min="0" value="{{.Product.Parcel.HeightMM}}"></div>
+
         <button type="submit" class="btn">save core fields</button>
       </form>
     </section>

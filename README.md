@@ -19,15 +19,17 @@ The project is a very early stage so there's a lot of work to do so every contri
 * Top menu with category links, cart and account/log out.
 * Faceted filters per category (numeric ranges + enum checkboxes), scoped to the active category.
 * Variant selectors (e.g. Color / Size) on product pages; add-to-cart over HTMX.
+* Multi-image product galleries: click a thumbnail to swap the main image.
 * Customer accounts: orders history, saved shipping addresses, password change.
-* Checkout with personal pickup / courier / flat-rate shipping and card / PayPal / cash-on-delivery payment.
+* Checkout with **live carrier shipping rates** (USPS / UPS / FedEx / DHL via Shippo), refreshed over HTMX as the address is entered, falling back to static flat-rate / pickup / courier when no carrier is configured.
+* **Real Stripe payments** using Stripe Elements, so card details go straight to Stripe and never touch the server.
 
 ![storefront](./docs/storefront.png)
 
 **Admin panel** (`/admin`, seeded user `admin@example.com` / `Admin123!`)
 
 * Dashboard with store counts.
-* Products: list, create (simple or with option types + variants), edit core fields, per-variant SKU/price/stock/image, add/edit/delete variants, manage option types on existing products (with consistent cascades), assign categories, attributes and an attribute set, delete.
+* Products: list, create (simple or with option types + variants), edit core fields, per-variant SKU/price/stock/image, add/edit/delete variants, manage option types on existing products (with consistent cascades), assign categories, attributes and an attribute set, upload image galleries, record shipping weight and dimensions, delete.
 * Categories, attribute types and attribute sets: full CRUD.
 * Orders: list all, view detail, admin-cancel.
 * Dedicated admin shell (sidebar layout) separate from the storefront.

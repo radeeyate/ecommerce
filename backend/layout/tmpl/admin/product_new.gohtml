@@ -24,6 +24,14 @@
         </select>
         <p class="form__aside muted">the set defines which attributes this product has (and their order). You can change it later.</p>
       </div>
+
+      <h4 class="admin-section__subtitle">shipping measurements</h4>
+      <p class="form__aside muted">Optional &mdash; used to fetch live carrier rates at checkout. Leave blank if you have not weighed the item yet; the configured default parcel is used instead. Weight in grams, dimensions in millimetres.</p>
+      <div class="field"><label for="p-weight">weight (g)</label><input id="p-weight" name="weight_grams" type="number" min="0" placeholder="500"></div>
+      <div class="field"><label for="p-length">length (mm)</label><input id="p-length" name="length_mm" type="number" min="0" placeholder="200"></div>
+      <div class="field"><label for="p-width">width (mm)</label><input id="p-width" name="width_mm" type="number" min="0" placeholder="150"></div>
+      <div class="field"><label for="p-height">height (mm)</label><input id="p-height" name="height_mm" type="number" min="0" placeholder="100"></div>
+
       <button type="submit" class="btn">create product</button>
     </form>
   </section>

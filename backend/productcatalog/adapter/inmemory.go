@@ -284,6 +284,38 @@ func (im *inMemory) SetProductAttributeSet(ctx context.Context, productID, setID
 	return nil
 }
 
+// SetProductGallery replaces the product's ordered gallery images.
+func (im *inMemory) SetProductGallery(ctx context.Context, productID string, images []string) error {
+	for i, p := range im.products {
+		if string(p.ID()) == productID {
+			im.products[i] = p.WithGallery(images)
+			return nil
+		}
+	}
+	return domain.ErrProductNotFound
+}
+
+// SetProductParcel records the product's physical measurements in place.
+func (im *inMemory) SetProductParcel(ctx context.Context, productID string, parcel domain.Parcel) error {
+	for i, p := range im.products {
+		if string(p.ID()) == productID {
+			im.products[i] = p.WithParcel(parcel)
+			return nil
+		}
+	}
+	return domain.ErrProductNotFound
+}
+
+// SetVariantWeight records a single variant's mass in grams.
+func (im *inMemory) SetVariantWeight(ctx context.Context, variantID string, weightGrams int) error {
+	pid, i, ok := im.find(variantID)
+	if !ok {
+		return domain.ErrProductNotFound
+	}
+	im.variants[pid][i] = im.variants[pid][i].WithWeight(weightGrams)
+	return nil
+}
+
 func (im *inMemory) find(variantID string) (string, int, bool) {
 	for pid, vs := range im.variants {
 		for i, v := range vs {

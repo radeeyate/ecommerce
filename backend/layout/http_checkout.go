@@ -51,19 +51,36 @@ func (handler httpHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := map[string]any{
-		"Cart":                  cart,
-		"ShippingMethods":       checkoutDomain.ShippingMethods(),
-		"PaymentMethods":        checkoutDomain.PaymentMethods(),
-		"StripePublishableKey":  handler.stripePublishableKey,
+		"Cart":                 cart,
+		"PaymentMethods":       checkoutDomain.PaymentMethods(),
+		"StripePublishableKey": handler.stripePublishableKey,
 	}
 
 	// Prefill the shipping form from the logged-in customer's default saved
 	// address, if they have one.
+	var prefill checkoutDomain.Address
 	if customerID := handler.currentCustomerID(r); customerID != "" {
 		if addr, ok, err := handler.shipSrv.Default(r.Context(), customerID); err == nil && ok {
 			data["ShipTo"] = addr
+			prefill = checkoutDomain.RebuildAddress(addr.Name(), addr.Street1(), addr.Street2(), addr.City(), addr.Zip(), addr.Country())
 		}
 	}
+
+	// Shipping options are rendered as an embedded fragment so the same
+	// template drives both this initial paint and the HTMX refresh that
+	// fires when the address changes. A customer with a saved address
+	// gets live rates immediately; everyone else sees the static
+	// catalogue until they type one.
+	var methods []checkoutDomain.ShippingMethod
+	var live bool
+	if rateableAddress(prefill) {
+		methods, live = handler.shippingOptions(r.Context(), cart, prefill)
+	} else {
+		methods = checkoutDomain.ShippingMethods()
+	}
+	data["ShippingMethodsHTML"] = renderPartial(w, r, http.HandlerFunc(func(pw http.ResponseWriter, pr *http.Request) {
+		handler.renderShippingMethods(pw, pr, methods, live)
+	}))
 
 	handler.renderTemplate(w, r, "checkout/show", data)
 }
@@ -77,7 +94,16 @@ func (handler httpHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	cardNumber := r.FormValue("card_number")
 	customerID := handler.currentCustomerID(r) // empty for anonymous
 
-	method, err := checkoutDomain.ShippingMethodByCode(r.FormValue("ship_method"))
+	// Resolve the chosen shipping method. The posted code may name a
+	// static catalogue entry OR a live carrier rate, so the address has
+	// to be parsed first — live rates cannot be re-resolved without a
+	// destination to re-rate against.
+	//
+	// Re-fetching rather than trusting a posted price is deliberate: the
+	// cost the order is charged must come from the carrier, never from
+	// the form, or a customer could pick their own shipping price.
+	formAddr := addressFromForm(r)
+	method, err := handler.resolveShippingMethod(r.Context(), sessID, r.FormValue("ship_method"), formAddr)
 	if err != nil {
 		session, _ := store.Get(r, "ecommerce")
 		session.AddFlash("please choose a shipping method", "error")

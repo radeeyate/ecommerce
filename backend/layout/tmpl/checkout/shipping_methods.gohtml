@@ -1,0 +1,23 @@
+{{/*
+  Shipping-method radio list. Rendered both inside the full checkout
+  page and standalone as an HTMX fragment when the customer's address
+  changes and live carrier rates are re-fetched.
+
+  The outer element keeps its id so hx-target can find it again after
+  each swap.
+*/}}
+<div id="shipping-methods">
+  {{if .LiveRates}}
+    <p class="muted checkout__note">live carrier rates for your address.</p>
+  {{else}}
+    <p class="muted checkout__note">enter your address below for live carrier rates.</p>
+  {{end}}
+
+  {{range $i, $m := .ShippingMethods}}
+    <label class="radio">
+      <input type="radio" name="ship_method" value="{{$m.Code}}" {{if eq $i 0}}checked{{end}}>
+      <span class="radio__label">{{$m.Label}}</span>
+      <span class="radio__cost muted">{{ money $m.Cost }}</span>
+    </label>
+  {{end}}
+</div>

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	checkoutDomain "github.com/bkielbasa/go-ecommerce/backend/checkout/domain"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/fx"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/imagestore"
 	"github.com/bkielbasa/go-ecommerce/backend/internal/mailer"
@@ -65,7 +66,11 @@ type httpHandler struct {
 	// to convert FROM USD TO each supported display currency).
 	rates                fx.Rates
 	stripePublishableKey string
-	logger               logrus.FieldLogger
+	// rateProvider fetches live carrier shipping rates. Nil when no
+	// carrier is configured, in which case checkout falls back to the
+	// static shipping-method catalogue.
+	rateProvider checkoutDomain.RateProvider
+	logger       logrus.FieldLogger
 }
 
 // HomePage renders the storefront landing page: a "new arrivals" grid of the
@@ -171,6 +176,10 @@ func (m boundedContext) MuxRegister(r *mux.Router) {
 
 	r.HandleFunc("/checkout", observability.HTTPWrap(m.handler.Checkout, m.logger)).Methods("GET")
 	r.HandleFunc("/checkout", observability.HTTPWrap(m.handler.PlaceOrder, m.logger)).Methods("POST")
+	// Live carrier rates, fetched over HTMX once the customer has
+	// entered enough of an address to rate against. Kept off the main
+	// checkout render so a slow carrier cannot delay the first paint.
+	r.HandleFunc("/checkout/rates", observability.HTTPWrap(m.handler.ShippingRates, m.logger)).Methods("POST")
 	r.HandleFunc("/orders", observability.HTTPWrap(m.handler.Orders, m.logger)).Methods("GET")
 	r.HandleFunc("/order/{orderID}", observability.HTTPWrap(m.handler.Order, m.logger)).Methods("GET")
 	r.HandleFunc("/order/{orderID}/cancel", observability.HTTPWrap(m.handler.CancelOrder, m.logger)).Methods("POST")
@@ -287,6 +296,48 @@ func (m boundedContext) MuxRegister(r *mux.Router) {
 	r.HandleFunc("/admin/repricing", observability.HTTPWrap(m.handler.AdminRepricing, m.logger)).Methods("GET")
 	r.HandleFunc("/admin/repricing", observability.HTTPWrap(m.handler.AdminStartRepricing, m.logger)).Methods("POST")
 	r.HandleFunc("/admin/repricing/{id}", observability.HTTPWrap(m.handler.AdminRepricingDetail, m.logger)).Methods("GET")
+}
+
+// renderPartialTemplate renders a single template file as an HTMX
+// fragment — no layout shell, no session/CSRF/nav plumbing. It binds the
+// same `money` helper the full-page path installs so a fragment renders
+// prices identically to the page it was swapped into.
+//
+// Fragments are used where a carrier call or a slow query would
+// otherwise block the initial page paint: the page renders immediately
+// with a cheap default and swaps in the expensive result when it
+// arrives.
+func (handler httpHandler) renderPartialTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]any) {
+	if data == nil {
+		data = make(map[string]any)
+	}
+
+	path := "./layout/tmpl/" + templateName + ".gohtml"
+	ts, err := template.New("").Funcs(template.FuncMap{
+		"html": func(value interface{}) template.HTML {
+			return template.HTML(fmt.Sprint(value))
+		},
+		"add":   func(a, b int) int { return a + b },
+		"dict":  templateDict,
+		"money": moneyFunc(handler.rates, handler.currentCurrency(r)),
+	}).ParseFiles(path)
+	if err != nil {
+		handler.logger.WithError(err).Error("cannot parse partial template")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// A CSRF token is issued even for fragments: the shipping-method
+	// fragment is swapped into a form whose hidden token must stay
+	// valid, and re-issuing keeps it fresh.
+	if _, err := issueCSRFToken(r, w); err != nil {
+		handler.logger.WithError(err).Error("cannot issue CSRF token for partial")
+	}
+
+	if err := ts.ExecuteTemplate(w, filepath.Base(path), data); err != nil {
+		handler.logger.WithError(err).Error("cannot execute partial template")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
 
 func (handler httpHandler) renderTemplate(w http.ResponseWriter, r *http.Request, templateName string, data map[string]any) {

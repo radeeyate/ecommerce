@@ -97,20 +97,50 @@ type config struct {
 	FXRates string
 	// StripeSecretKey is the Stripe API secret key (sk_test_xxx or
 	// sk_live_xxx). Used to authenticate all Stripe API requests from
-	// the backend. This MUST be set in production; the app will fail
-	// to boot if it is left empty in production mode.
-	StripeSecretKey string `conf:"default:,STRIPE_SECRET_KEY"`
+	// the backend. Leave blank to disable charging entirely — the
+	// composition root logs a loud WARN at boot in that case.
+	StripeSecretKey string `conf:"mask"`
 	// StripePublishableKey is the Stripe publishable key (pk_test_xxx
 	// or pk_live_xxx). Served to the frontend so Stripe.js can
 	// securely collect payment details. Safe to expose — publishable
 	// keys are meant to be public.
-	StripePublishableKey string `conf:"default:,STRIPE_PUBLISHABLE_KEY"`
+	StripePublishableKey string
 	// StripeWebhookSecret is the shared secret used to verify the HMAC
 	// signature on inbound payment webhooks (Stripe-Signature header).
 	// This is the whsec_xxx value from the Stripe dashboard. The
 	// payments webhook route is skipped entirely if the secret is left
 	// blank.
-	StripeWebhookSecret string `conf:"default:,STRIPE_WEBHOOK_SECRET"`
+	StripeWebhookSecret string `conf:"mask"`
+	// ShippoAPIKey authenticates rate requests against the Shippo API
+	// (shippo_test_xxx or shippo_live_xxx). Leave blank to fall back to
+	// the static shipping-method catalogue — the checkout page then
+	// behaves exactly as it did before live rates were introduced.
+	ShippoAPIKey string `conf:"mask"`
+	// ShipFrom* describe the warehouse parcels ship from. Carriers need
+	// a concrete origin to rate against; all five fields are required
+	// once ShippoAPIKey is set.
+	ShipFromName    string `conf:"default:Warehouse"`
+	ShipFromStreet1 string
+	ShipFromCity    string
+	ShipFromState   string
+	ShipFromZip     string
+	ShipFromCountry string `conf:"default:US"`
+	// DefaultParcel* are the fallback measurements used for products an
+	// operator has not measured yet. Without them a basket containing
+	// an unmeasured product could not be rated at all. Units are grams
+	// and millimetres, matching productcatalog.Parcel.
+	DefaultParcelWeightGrams int `conf:"default:500"`
+	DefaultParcelLengthMM    int `conf:"default:200"`
+	DefaultParcelWidthMM     int `conf:"default:150"`
+	DefaultParcelHeightMM    int `conf:"default:100"`
+	// ShippingRateTimeout bounds how long checkout waits for Shippo
+	// before falling back to the static catalogue. Carriers are slow
+	// and a checkout page must not hang on them.
+	ShippingRateTimeout time.Duration `conf:"default:5s"`
+	// ShippingMarkupPercent is added to every carrier rate before it is
+	// shown to the customer, covering packaging and handling. 0 passes
+	// the carrier's price through unchanged.
+	ShippingMarkupPercent float64 `conf:"default:0"`
 }
 
 // defaultSessionSecret is the placeholder value SessionSecret must NOT keep
